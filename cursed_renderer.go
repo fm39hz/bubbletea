@@ -123,9 +123,11 @@ func (s *cursedRenderer) start() {
 				_, _ = s.scr.WriteString(ansi.SetCursorColor(col.Hex()))
 			}
 		}
-		curStyle := encodeCursorStyle(s.lastView.Cursor.Shape, s.lastView.Cursor.Blink)
-		_, _ = s.scr.WriteString(ansi.SetCursorStyle(curStyle))
-		s.cursorStyleChanged = true
+		if !s.lastView.Cursor.PreserveStyle {
+			curStyle := encodeCursorStyle(s.lastView.Cursor.Shape, s.lastView.Cursor.Blink)
+			_, _ = s.scr.WriteString(ansi.SetCursorStyle(curStyle))
+			s.cursorStyleChanged = true
+		}
 	}
 	if s.lastView.ForegroundColor != nil {
 		col, ok := colorful.MakeColor(s.lastView.ForegroundColor)
@@ -502,7 +504,16 @@ func (s *cursedRenderer) flush(closing bool) error {
 	if lcur != nil {
 		lcStyle = encodeCursorStyle(lcur.Shape, lcur.Blink)
 	}
-	if ccStyle != lcStyle {
+	preserve := ccur != nil && ccur.PreserveStyle
+	wasPreserved := lcur != nil && lcur.PreserveStyle
+	if preserve && lcur != nil && !wasPreserved {
+		style := 0
+		if s.cursorStyleKnown {
+			style = s.originalCursorStyle
+		}
+		_, _ = s.scr.WriteString(ansi.SetCursorStyle(style))
+		s.cursorStyleChanged = true
+	} else if !preserve && !(ccur == nil && wasPreserved) && (ccStyle != lcStyle || (ccur != nil && wasPreserved)) {
 		_, _ = s.scr.WriteString(ansi.SetCursorStyle(ccStyle))
 		s.cursorStyleChanged = true
 	}
